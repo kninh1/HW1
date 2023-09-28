@@ -1,28 +1,306 @@
 ---
-title: ""
-author: ""
+title: HW1
+author: Katrina Ninh
 format:
   html:
     embed-resources: true
 ---
 
-## Quarto
+## Load necessary libraries
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+```{r,message=FALSE,warning=FALSE}
+library(ggplot2)
 
-## Running Code
+library(lubridate)
 
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+library(dplyr)
 
-```{r}
-1 + 1
+library(leaflet)
 ```
 
-You can add options to executable code like this
+### Question 01
+
+#### Import the dataset
 
 ```{r}
-#| echo: false
-2 * 2
+data_2002 <- read.table("ad_viz_plotval_data_2002.csv",header= TRUE, sep=',')
+
+data_2022 <- read.table("ad_viz_plotval_data_2022.csv",header= TRUE, sep=',')
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+```{r}
+#Consider 2002 data
+
+dim(data_2002)
+
+head(data_2002)
+
+tail(data_2002)
+
+colnames(data_2002)
+
+str(data_2002)
+```
+
+```{r}
+#Consider 2022 data
+
+dim(data_2022)
+
+head(data_2022)
+
+tail(data_2022)
+
+colnames(data_2022)
+
+str(data_2022)
+```
+
+```{r}
+# check data type of key variable
+
+class(data_2002$Date)
+
+class(data_2022$Date)
+
+data_2002$Date <- as.Date(data_2002$Date, format = "%m/%d/%Y")
+
+data_2022$Date <- as.Date(data_2022$Date, format = "%m/%d/%Y")
+
+class(data_2002$Date)
+
+class(data_2022$Date)
+```
+
+-   2002 data for all sites in California has 15976 observations and 2022 data for all sites in California has 57775 observations. Both of the dataset have same variable and same number of variables. There have several data type variables in both datasets.( numeric, integer and character)
+
+-   In both datasets 'Date' variable in character type. For further analysis have to convert it to date format. Using the as.Date() function can convert the "Date" variables from character format to date format.
+
+### Question 02
+
+```{r}
+# Combine the two data frames into one(combined data)
+
+combined_data <- rbind(data_2002, data_2022)
+
+# Extract the year 
+
+combined_data$Year <- year(combined_data$Date)
+
+names(combined_data)
+
+colnames(combined_data)[colnames(combined_data) == "Daily.Mean.PM2.5.Concentration"] <- "PM2.5_Conc"
+```
+
+### Question 03
+
+```{r}
+
+library(leaflet)
+
+site_map <- leaflet(combined_data) %>%
+
+  addTiles() %>%
+
+  addCircleMarkers(
+
+    lat = ~SITE_LATITUDE,
+
+    lng = ~SITE_LONGITUDE,
+
+    color = ~ifelse(Year == 2002, "purple", "red"),  
+
+    radius = 5,
+
+    popup = ~paste("Site Name: ", Site.Name, "<br> Year: ", Year)) %>%
+
+  addLegend(position = "bottomright",colors = c("purple", "red"),labels = c("2002", "2022"),title = "Year",opacity = 1) %>%
+
+  setView(lng = -120, lat = 37, zoom = 6)  
+
+site_map
+```
+
+### Question 04
+
+```{r}
+summary(combined_data$PM2.5_Conc)
+
+missing_2002 <- sum(is.na(combined_data$PM2.5_Conc[combined_data$Year == 2002]))
+
+missing_2002
+
+missing_2022 <- sum(is.na(combined_data$PM2.5_Conc[combined_data$Year == 2022]))
+
+missing_2022
+
+summary(combined_data$PM2.5_Conc)
+
+combined_data$Year <- as.factor(combined_data$Year)
+
+ggplot(combined_data[combined_data$Year == 2002, ], aes(x = Date, y = PM2.5_Conc, color = Year)) +
+
+  geom_line() +
+
+  labs(title = "Time Series of PM2.5 Concentrations",
+
+       x = "Date",
+
+       y = "PM2.5 Concentration") +
+
+  scale_color_manual(values = c("blue"))
+
+ggplot(combined_data[combined_data$Year == 2022, ], aes(x = Date, y = PM2.5_Conc, color = Year)) +
+
+  geom_line() +
+
+  labs(title = "Time Series of PM2.5 Concentrations",
+
+       x = "Date",
+
+       y = "PM2.5 Concentration") +
+
+  scale_color_manual(values = c( "red"))
+```
+
+-   There havent any missing values in the PM2.5 variable. But according to the summary statistics , there can see some minus values.The daily change concentration of particulate matter means the moles of particulate matter in a certain volume . So it cannot be negative.
+
+-   According to above time series plots there have pattern august 2022 to oct 2022 in 2022 data.
+
+### Question 05
+
+-   State Level Analysis(here consider California only)
+
+```{r}
+boxplot <- ggplot(combined_data, aes(x = STATE, y = PM2.5_Conc)) +
+
+  geom_boxplot(fill = "lightblue") +
+
+  labs(
+
+    title = "PM2.5 Concentrations by California State",
+
+    x = "California",
+
+    y = "PM2.5 Concentration"
+
+  ) +
+
+  facet_grid(. ~ Year, scales = "free_x")
+
+boxplot
+```
+
+-   According to the above histograms the mean and median concentrations for 2022 are lower than those for 2002, it suggests a decrease in PM2.5 concentrations.
+
+-   County Level Analysis
+
+```{r}
+county_summary_2002 <- combined_data %>%
+
+  filter(Year == 2002) %>%
+
+  group_by( COUNTY) %>%
+
+  summarize(
+
+    Mean_PM2.5 = mean(PM2.5_Conc, na.rm = TRUE),
+
+    Median_PM2.5 = median(PM2.5_Conc, na.rm = TRUE),
+
+    Max_PM2.5 = max(PM2.5_Conc, na.rm = TRUE),
+
+    Min_PM2.5 = min(PM2.5_Conc, na.rm = TRUE) )
+
+county_summary_2002
+
+ggplot(data=county_summary_2002, aes(x=COUNTY, y=Mean_PM2.5, group=1)) +
+
+  geom_line(linetype = "dotted")+
+
+  geom_point(color='red') +
+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+county_summary_2022 <- combined_data %>%
+
+  filter(Year == 2022) %>%
+
+  group_by( COUNTY) %>%
+
+  summarize(
+
+    Mean_PM2.5 = mean(PM2.5_Conc, na.rm = TRUE),
+
+    Median_PM2.5 = median(PM2.5_Conc, na.rm = TRUE),
+
+    Max_PM2.5 = max(PM2.5_Conc, na.rm = TRUE),
+
+    Min_PM2.5 = min(PM2.5_Conc, na.rm = TRUE))
+
+county_summary_2022
+
+ggplot(data=county_summary_2022, aes(x=COUNTY, y=Mean_PM2.5, group=1)) +
+
+  geom_line(linetype = "dotted")+
+
+  geom_point(color='purple') +
+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+-   By comparing above two line plots can tell mean concentrations for 2022 are lower than those for 2002 in every county in California.
+
+-   'Site Level Analysis ( here consider sites in Los Angeles county )'
+
+```{r}
+la_summary_2002 <- combined_data %>%
+
+  filter(Year == 2002, COUNTY == "Los Angeles") %>%
+
+  group_by(Site.Name) %>%
+
+  summarize(
+
+    Mean_PM2.5 = mean(PM2.5_Conc, na.rm = TRUE),
+
+    Median_PM2.5 = median(PM2.5_Conc, na.rm = TRUE),
+
+    Max_PM2.5 = max(PM2.5_Conc, na.rm = TRUE),
+
+    Min_PM2.5 = min(PM2.5_Conc, na.rm = TRUE)
+
+  )
+
+la_summary_2002
+
+ggplot(la_summary_2002, aes(Site.Name, Mean_PM2.5, fill=Site.Name)) + geom_bar(stat="identity") +
+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+la_summary_2022 <- combined_data %>%
+
+  filter(Year == 2022, COUNTY == "Los Angeles") %>%
+
+  group_by(Site.Name) %>%
+
+  summarize(
+
+    Mean_PM2.5 = mean(PM2.5_Conc, na.rm = TRUE),
+
+    Median_PM2.5 = median(PM2.5_Conc, na.rm = TRUE),
+
+    Max_PM2.5 = max(PM2.5_Conc, na.rm = TRUE),
+
+    Min_PM2.5 = min(PM2.5_Conc, na.rm = TRUE)
+
+  )
+
+la_summary_2022
+
+ggplot(la_summary_2022, aes(Site.Name, Mean_PM2.5, fill=Site.Name)) + geom_bar(stat="identity") +
+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+-   By conducting these analyses at different spatial levels (state, county, and site in Los Angeles) and using plots and summary statistics, can tell that there is a significant decrease in PM2.5 concentrations. Finally can conclude that there has been an improvement in air quality in California over the last 20 years.
